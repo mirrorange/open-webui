@@ -88,11 +88,13 @@ class ChatPermissions(BaseModel):
     file_upload: bool = True
     delete: bool = True
     edit: bool = True
+    multiple_models: bool = True
     temporary: bool = True
     temporary_enforced: bool = False
 
 
 class FeaturesPermissions(BaseModel):
+    direct_tool_servers: bool = False
     web_search: bool = True
     image_generation: bool = True
     code_interpreter: bool = True

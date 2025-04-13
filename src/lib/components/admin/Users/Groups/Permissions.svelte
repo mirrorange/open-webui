@@ -24,10 +24,12 @@
 			delete: true,
 			edit: true,
 			file_upload: true,
+			multiple_models: true,
 			temporary: true,
-			temporary_enforced: true
+			temporary_enforced: false
 		},
 		features: {
+			direct_tool_servers: false,
 			web_search: true,
 			image_generation: true,
 			code_interpreter: true
@@ -273,6 +275,14 @@
 
 		<div class="  flex w-full justify-between my-2 pr-2">
 			<div class=" self-center text-xs font-medium">
+				{$i18n.t('Allow Multiple Models in Chat')}
+			</div>
+
+			<Switch bind:state={permissions.chat.multiple_models} />
+		</div>
+
+		<div class="  flex w-full justify-between my-2 pr-2">
+			<div class=" self-center text-xs font-medium">
 				{$i18n.t('Allow Temporary Chat')}
 			</div>
 
@@ -294,6 +304,14 @@
 
 	<div>
 		<div class=" mb-2 text-sm font-medium">{$i18n.t('Features Permissions')}</div>
+
+		<div class="  flex w-full justify-between my-2 pr-2">
+			<div class=" self-center text-xs font-medium">
+				{$i18n.t('Direct Tool Servers')}
+			</div>
+
+			<Switch bind:state={permissions.features.direct_tool_servers} />
+		</div>
 
 		<div class="  flex w-full justify-between my-2 pr-2">
 			<div class=" self-center text-xs font-medium">
