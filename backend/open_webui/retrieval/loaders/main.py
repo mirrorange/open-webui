@@ -14,7 +14,7 @@ from langchain_community.document_loaders import (
     TextLoader,
     UnstructuredEPubLoader,
     UnstructuredExcelLoader,
-    UnstructuredMarkdownLoader,
+    UnstructuredODTLoader,
     UnstructuredPowerPointLoader,
     UnstructuredRSTLoader,
     UnstructuredXMLLoader,
@@ -162,15 +162,15 @@ class DoclingLoader:
                     if picture_description_mode == "local" and self.params.get(
                         "picture_description_local", {}
                     ):
-                        params["picture_description_local"] = self.params.get(
-                            "picture_description_local", {}
+                        params["picture_description_local"] = json.dumps(
+                            self.params.get("picture_description_local", {})
                         )
 
                     elif picture_description_mode == "api" and self.params.get(
                         "picture_description_api", {}
                     ):
-                        params["picture_description_api"] = self.params.get(
-                            "picture_description_api", {}
+                        params["picture_description_api"] = json.dumps(
+                            self.params.get("picture_description_api", {})
                         )
 
                 if self.params.get("ocr_engine") and self.params.get("ocr_lang"):
@@ -226,7 +226,10 @@ class Loader:
 
     def _is_text_file(self, file_ext: str, file_content_type: str) -> bool:
         return file_ext in known_source_ext or (
-            file_content_type and file_content_type.find("text/") >= 0
+            file_content_type
+            and file_content_type.find("text/") >= 0
+            # Avoid text/html files being detected as text
+            and not file_content_type.find("html") >= 0
         )
 
     def _get_loader(self, filename: str, file_content_type: str, file_path: str):
@@ -389,6 +392,8 @@ class Loader:
                 loader = UnstructuredPowerPointLoader(file_path)
             elif file_ext == "msg":
                 loader = OutlookMessageLoader(file_path)
+            elif file_ext == "odt":
+                loader = UnstructuredODTLoader(file_path)
             elif self._is_text_file(file_ext, file_content_type):
                 loader = TextLoader(file_path, autodetect_encoding=True)
             else:

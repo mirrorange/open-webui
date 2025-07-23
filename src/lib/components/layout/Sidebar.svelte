@@ -22,21 +22,18 @@
 		socket,
 		config,
 		isApp,
-		models
+		models,
+		selectedFolder
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
 	const i18n = getContext('i18n');
 
 	import {
-		deleteChatById,
 		getChatList,
 		getAllTags,
-		getChatListBySearchText,
-		createNewChat,
 		getPinnedChatList,
 		toggleChatPinnedStatusById,
-		getChatPinnedStatusById,
 		getChatById,
 		updateChatFolderIdById,
 		importChat
@@ -59,8 +56,9 @@
 	import ChannelItem from './Sidebar/ChannelItem.svelte';
 	import PencilSquare from '../icons/PencilSquare.svelte';
 	import Home from '../icons/Home.svelte';
-	import MagnifyingGlass from '../icons/MagnifyingGlass.svelte';
+	import Search from '../icons/Search.svelte';
 	import SearchModal from './SearchModal.svelte';
+	import FolderModal from './Sidebar/Folders/FolderModal.svelte';
 
 	const BREAKPOINT = 768;
 
@@ -77,6 +75,7 @@
 	let chatListLoading = false;
 	let allChatsLoaded = false;
 
+	let showCreateFolderModal = false;
 	let folders = {};
 	let newFolderId = null;
 
@@ -120,7 +119,7 @@
 		}
 	};
 
-	const createFolder = async (name = 'Untitled') => {
+	const createFolder = async ({ name, data }) => {
 		if (name === '') {
 			toast.error($i18n.t('Folder name cannot be empty.'));
 			return;
@@ -151,13 +150,16 @@
 			}
 		};
 
-		const res = await createNewFolder(localStorage.token, name).catch((error) => {
+		const res = await createNewFolder(localStorage.token, {
+			name,
+			data
+		}).catch((error) => {
 			toast.error(`${error}`);
 			return null;
 		});
 
 		if (res) {
-			newFolderId = res.id;
+			// newFolderId = res.id;
 			await initFolders();
 		}
 	};
@@ -202,7 +204,15 @@
 		for (const item of items) {
 			console.log(item);
 			if (item.chat) {
-				await importChat(localStorage.token, item.chat, item?.meta ?? {}, pinned, folderId);
+				await importChat(
+					localStorage.token,
+					item.chat,
+					item?.meta ?? {},
+					pinned,
+					folderId,
+					item?.created_at ?? null,
+					item?.updated_at ?? null
+				);
 			}
 		}
 
@@ -357,6 +367,10 @@
 			}
 		});
 
+		chats.subscribe((value) => {
+			initFolders();
+		});
+
 		await initChannels();
 		await initChatList();
 
@@ -417,6 +431,14 @@
 			await initChannels();
 			showCreateChannel = false;
 		}
+	}}
+/>
+
+<FolderModal
+	bind:show={showCreateFolderModal}
+	onSubmit={async (folder) => {
+		await createFolder(folder);
+		showCreateFolderModal = false;
 	}}
 />
 
@@ -490,10 +512,15 @@
 				draggable="false"
 				on:click={async () => {
 					selectedChatId = null;
-					await goto('/');
-					const newChatButton = document.getElementById('new-chat-button');
+					selectedFolder.set(null);
+
+					if ($user?.role !== 'admin' && $user?.permissions?.chat?.temporary_enforced) {
+						await temporaryChatEnabled.set(true);
+					} else {
+						await temporaryChatEnabled.set(false);
+					}
+
 					setTimeout(() => {
-						newChatButton?.click();
 						if ($mobile) {
 							showSidebar.set(false);
 						}
@@ -505,11 +532,11 @@
 						<img
 							crossorigin="anonymous"
 							src="{WEBUI_BASE_URL}/static/favicon.png"
-							class=" size-5 -translate-x-1.5 rounded-full"
+							class="sidebar-new-chat-icon size-5 -translate-x-1.5 rounded-full"
 							alt="logo"
 						/>
 					</div>
-					<div class=" self-center font-medium text-sm text-gray-850 dark:text-white font-primary">
+					<div class=" self-center text-sm text-gray-850 dark:text-white font-primary">
 						{$i18n.t('New Chat')}
 					</div>
 				</div>
@@ -555,11 +582,11 @@
 				draggable="false"
 			>
 				<div class="self-center">
-					<MagnifyingGlass strokeWidth="2" className="size-[1.1rem]" />
+					<Search strokeWidth="2" className="size-[1.1rem]" />
 				</div>
 
 				<div class="flex self-center translate-y-[0.5px]">
-					<div class=" self-center font-medium text-sm font-primary">{$i18n.t('Search')}</div>
+					<div class=" self-center text-sm font-primary">{$i18n.t('Search')}</div>
 				</div>
 			</button>
 		</div>
@@ -600,7 +627,7 @@
 					</div>
 
 					<div class="flex self-center translate-y-[0.5px]">
-						<div class=" self-center font-medium text-sm font-primary">{$i18n.t('Notes')}</div>
+						<div class=" self-center text-sm font-primary">{$i18n.t('Notes')}</div>
 					</div>
 				</a>
 			</div>
@@ -639,17 +666,13 @@
 					</div>
 
 					<div class="flex self-center translate-y-[0.5px]">
-						<div class=" self-center font-medium text-sm font-primary">{$i18n.t('Workspace')}</div>
+						<div class=" self-center text-sm font-primary">{$i18n.t('Workspace')}</div>
 					</div>
 				</a>
 			</div>
 		{/if}
 
-		<div
-			class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden {$temporaryChatEnabled
-				? 'opacity-20'
-				: ''}"
-		>
+		<div class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
 			{#if ($models ?? []).length > 0 && ($settings?.pinnedModels ?? []).length > 0}
 				<div class="mt-0.5">
 					{#each $settings.pinnedModels as modelId (modelId)}
@@ -672,14 +695,15 @@
 									<div class="self-center shrink-0">
 										<img
 											crossorigin="anonymous"
-											src={model?.info?.meta?.profile_image_url ?? '/static/favicon.png'}
+											src={model?.info?.meta?.profile_image_url ??
+												`${WEBUI_BASE_URL}/static/favicon.png`}
 											class=" size-5 rounded-full -translate-x-[0.5px]"
 											alt="logo"
 										/>
 									</div>
 
 									<div class="flex self-center translate-y-[0.5px]">
-										<div class=" self-center font-medium text-sm font-primary line-clamp-1">
+										<div class=" self-center text-sm font-primary line-clamp-1">
 											{model?.name ?? modelId}
 										</div>
 									</div>
@@ -721,9 +745,13 @@
 				className="px-2 mt-0.5"
 				name={$i18n.t('Chats')}
 				onAdd={() => {
-					createFolder();
+					showCreateFolderModal = true;
 				}}
 				onAddLabel={$i18n.t('New Folder')}
+				on:change={async (e) => {
+					selectedFolder.set(null);
+					await goto('/');
+				}}
 				on:import={(e) => {
 					importChatHandler(e.detail);
 				}}
@@ -735,7 +763,15 @@
 							return null;
 						});
 						if (!chat && item) {
-							chat = await importChat(localStorage.token, item.chat, item?.meta ?? {});
+							chat = await importChat(
+								localStorage.token,
+								item.chat,
+								item?.meta ?? {},
+								false,
+								null,
+								item?.created_at ?? null,
+								item?.updated_at ?? null
+							);
 						}
 
 						if (chat) {
@@ -773,10 +809,6 @@
 					}
 				}}
 			>
-				{#if $temporaryChatEnabled}
-					<div class="absolute z-40 w-full h-full flex justify-center"></div>
-				{/if}
-
 				{#if $pinnedChats.length > 0}
 					<div class="flex flex-col space-y-1 rounded-xl">
 						<Folder
@@ -797,7 +829,15 @@
 										return null;
 									});
 									if (!chat && item) {
-										chat = await importChat(localStorage.token, item.chat, item?.meta ?? {});
+										chat = await importChat(
+											localStorage.token,
+											item.chat,
+											item?.meta ?? {},
+											false,
+											null,
+											item?.created_at ?? null,
+											item?.updated_at ?? null
+										);
 									}
 
 									if (chat) {
@@ -856,12 +896,17 @@
 				{#if folders}
 					<Folders
 						{folders}
+						{shiftKey}
+						onDelete={(folderId) => {
+							selectedFolder.set(null);
+							initChatList();
+						}}
+						on:update={() => {
+							initChatList();
+						}}
 						on:import={(e) => {
 							const { folderId, items } = e.detail;
 							importChatHandler(items, false, folderId);
-						}}
-						on:update={async (e) => {
-							initChatList();
 						}}
 						on:change={async () => {
 							initChatList();
